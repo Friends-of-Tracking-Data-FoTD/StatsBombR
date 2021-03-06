@@ -1,7 +1,9 @@
 library(rjson)
 #library(jsonlite) [you can try jsonlite::fromJSON(x,flatten=TRUE) to see what that does when reading in the JSON file]
 library(data.table)
-
+library(dplyr)
+library(ggplot2)
+'%!in%' = Negate('%in%')
 ####Obtain Competitions####
 
 #Read File from JSON into a list 
@@ -14,7 +16,7 @@ competitions.df <- data.frame(do.call(rbind,competitions),stringsAsFactors = FAL
 
 ####Obtain Matches####
 match.files <- list.files(path="C:\\Users\\sgopaladesikan\\Desktop\\open-data-master\\data\\matches",
-           full.names = TRUE,recursive = TRUE)
+                          full.names = TRUE,recursive = TRUE)
 
 matches.list <- list()
 for(i in 1:length(match.files)){
@@ -38,7 +40,7 @@ all.matches.clean$away_score <- as.numeric(all.matches.clean$away_score)
 
 ####Obtain Events####
 event.files <- list.files(path="C:\\Users\\sgopaladesikan\\Desktop\\open-data-master\\data\\events",
-                           full.names = TRUE,recursive = TRUE)
+                          full.names = TRUE,recursive = TRUE)
 
 event.list <- list()
 for(i in 1:length(event.files)){
@@ -140,7 +142,9 @@ for(i in 1:length(event.files)){
 #matches.count <- all.matches.clean %>% group_by(competition.competition_id,season.season_id) %>% summarise(count = n())
 
 matches.wsl.1819 <- all.matches.clean[which(all.matches.clean$competition.competition_id==37 & all.matches.clean$season.season_id==4),]
-matches.wsl.1819 <- matches.wsl.1819[order(matches.wsl.1819$match_week),]
+#The match week does not follow chronological order. So, it is best to sort by match date
+matches.wsl.1819 <- matches.wsl.1819[order(matches.wsl.1819$match_date),]
+
 
 wsl.teams <- unique(matches.wsl.1819$home_team.home_team_name) #get the unique list of teams so we can loop through each team
 
@@ -150,15 +154,24 @@ for(w in 1:length(wsl.teams)){
   squad.rotation.list[[wsl.teams[w]]] <- list()
   team.starting.x11[[wsl.teams[w]]] <- list()
   team.matches <- matches.wsl.1819[which(matches.wsl.1819$home_team.home_team_name==wsl.teams[w] | 
-                           matches.wsl.1819$away_team.away_team_name==wsl.teams[w]),]
+                                           matches.wsl.1819$away_team.away_team_name==wsl.teams[w]),]
   team.matches$GD <- team.matches$home_score-team.matches$away_score
   
-  team.events.index <- which(names(event.list) %in% team.matches$match_id)
+  #team.events.index <- which(names(event.list) %in% team.matches$match_id)
+  #which(names(event.list)... follows the order of events.list, which is not ordered according to match_week, or even date
+  #event.list follows the order of match_ids. So, team rotation gets the wrong order of games
+  #As an exaple of the error:
+  #In team.matches(for w==1), match_id n. 19758 happens only after match_id 19806.
+  #But in events.list, match_id 19758 is after 19757. This list is ordered by id and not by date(or match_week). Thus, the error
+  #The following line does what the previous intended, keeping the match date order.
+  team.events.index <- sapply(team.matches$match_id,function(id)which(names(event.list)==id))
+  
+  
   team.events <- event.list[team.events.index]
   team.id <- unique(matches.wsl.1819[which(matches.wsl.1819$home_team.home_team_name==wsl.teams[w]),]$home_team.home_team_id)
   team.matches$Team.GD <- ifelse(team.matches$home_team.home_team_id==team.id,team.matches$GD,team.matches$GD*-1)
   team.matches$Result <- ifelse(team.matches$Team.GD>0,"W",
-                        ifelse(team.matches$Team.GD==0,"D","L"))
+                                ifelse(team.matches$Team.GD==0,"D","L"))
   
   
   for(i in 1:length(team.events)){ #for each game of that particular team, get the starting 11 for them
@@ -204,7 +217,7 @@ for(i in 1:length(pass.events.index)){
   all.passes.locations <- all.passes[,c("team_id","X.Pass","Y.Pass","X.Receive","Y.Receive")]
   
   passes.list[[i]] <- all.passes.locations
-
+  
 }
 
 full.pass.df <- do.call(rbind,passes.list)
@@ -239,13 +252,13 @@ hori5 + geom_segment(data=cluster.50.summary, aes(x=X.Pass,xend=X.Receive,
   geom_text(data=cluster.50.summary,aes(x=X.Pass,y=Y.Pass,label=Cluster.50))
 
 hori5 + geom_segment(data=cluster.50.summary, aes(x=X.Pass,xend=X.Receive,
-                                                   y=Y.Pass,yend=Y.Receive),size=1.5,arrow=arrow(length = unit(0.03, "npc"))) +
-        geom_segment(data=cluster.50.summary[which(cluster.50.summary$Cluster.50 %in% arsenal.clusters$Cluster.50),], aes(x=X.Pass,xend=X.Receive,
-                                            y=Y.Pass,yend=Y.Receive),size=1.5,color="red",arrow=arrow(length = unit(0.03, "npc")))
+                                                  y=Y.Pass,yend=Y.Receive),size=1.5,arrow=arrow(length = unit(0.03, "npc"))) +
+  geom_segment(data=cluster.50.summary[which(cluster.50.summary$Cluster.50 %in% arsenal.clusters$Cluster.50),], aes(x=X.Pass,xend=X.Receive,
+                                                                                                                    y=Y.Pass,yend=Y.Receive),size=1.5,color="red",arrow=arrow(length = unit(0.03, "npc")))
 
 
 hori5 + geom_segment(data=full.pass.df[which(full.pass.df$Cluster.50==12 & full.pass.df$team_id==968),], aes(x=X.Pass,xend=X.Receive,
-                                                  y=Y.Pass,yend=Y.Receive),size=1.5,arrow=arrow(length = unit(0.03, "npc")))
+                                                                                                             y=Y.Pass,yend=Y.Receive),size=1.5,arrow=arrow(length = unit(0.03, "npc")))
 
 
 
